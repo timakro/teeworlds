@@ -599,6 +599,17 @@ void IGameController::Snap(int SnappingClient)
 
 	pGameInfoObj->m_RoundNum = (str_length(g_Config.m_SvMaprotation) && g_Config.m_SvRoundsPerMap) ? g_Config.m_SvRoundsPerMap : 0;
 	pGameInfoObj->m_RoundCurrent = m_RoundCount+1;
+
+	if(Server()->IsSixup(SnappingClient))
+	{
+		int *pGameData = (int*)Server()->SnapNewItem(6 + 24, 0, 3*4); // NETOBJTYPE_GAMEDATA
+		if(!pGameData)
+			return;
+
+		pGameData[0] = m_RoundStartTick;
+		pGameData[1] = 0; // m_GameStateFlags
+		pGameData[2] = 0; // m_GameStateEndTick
+	}
 }
 
 int IGameController::GetAutoTeam(int NotThisID)

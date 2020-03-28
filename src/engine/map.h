@@ -27,6 +27,7 @@ public:
 	virtual bool IsLoaded() = 0;
 	virtual void Unload() = 0;
 	virtual unsigned Crc() = 0;
+	virtual unsigned char *Sha256() = 0;
 };
 
 extern IEngineMap *CreateEngineMap();

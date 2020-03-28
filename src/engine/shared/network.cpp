@@ -41,12 +41,12 @@ int CNetRecvUnpacker::FetchChunk(CNetChunk *pChunk)
 		// TODO: add checking here so we don't read too far
 		for(int i = 0; i < m_CurrentChunk; i++)
 		{
-			pData = Header.Unpack(pData);
+			pData = Header.Unpack(pData, (m_pConnection && m_pConnection->m_Sixup) ? 6 : 4);
 			pData += Header.m_Size;
 		}
 
 		// unpack the header
-		pData = Header.Unpack(pData);
+		pData = Header.Unpack(pData, (m_pConnection && m_pConnection->m_Sixup) ? 6 : 4);
 		m_CurrentChunk++;
 
 		if(pData+Header.m_Size > pEnd)
@@ -107,7 +107,7 @@ void CNetBase::SendPacketConnless(NETSOCKET Socket, NETADDR *pAddr, const void *
 	net_udp_send(Socket, pAddr, aBuffer, 6+DataSize);
 }
 
-void CNetBase::SendPacket(NETSOCKET Socket, NETADDR *pAddr, CNetPacketConstruct *pPacket)
+void CNetBase::SendPacket(NETSOCKET Socket, NETADDR *pAddr, CNetPacketConstruct *pPacket, bool Sixup)
 {
 	unsigned char aBuffer[NET_MAX_PACKETSIZE];
 	int CompressedSize = -1;
@@ -150,6 +150,15 @@ void CNetBase::SendPacket(NETSOCKET Socket, NETADDR *pAddr, CNetPacketConstruct 
 		pPacket->m_Flags &= ~NET_PACKETFLAG_COMPRESSION;
 	}
 
+	if(Sixup)
+	{
+		unsigned Flags = 0;
+		if (pPacket->m_Flags&NET_PACKETFLAG_CONTROL) Flags |= 1;
+		if (pPacket->m_Flags&NET_PACKETFLAG_RESEND) Flags |= 2;
+		if (pPacket->m_Flags&NET_PACKETFLAG_COMPRESSION) Flags |= 4;
+		pPacket->m_Flags = Flags;
+	}
+
 	// set header and send the packet if all things are good
 	if(FinalSize >= 0)
 	{
@@ -172,7 +181,7 @@ void CNetBase::SendPacket(NETSOCKET Socket, NETADDR *pAddr, CNetPacketConstruct 
 }
 
 // TODO: rename this function
-int CNetBase::UnpackPacket(unsigned char *pBuffer, int Size, CNetPacketConstruct *pPacket)
+int CNetBase::UnpackPacket(unsigned char *pBuffer, int Size, CNetPacketConstruct *pPacket, bool Sixup)
 {
 	// check the size
 	if(Size < NET_PACKETHEADERSIZE_WITHOUT_TOKEN || Size > NET_MAX_PACKETSIZE)
@@ -200,6 +209,15 @@ int CNetBase::UnpackPacket(unsigned char *pBuffer, int Size, CNetPacketConstruct
 	pPacket->m_NumChunks = pBuffer[2];
 	pPacket->m_DataSize = Size - NET_PACKETHEADERSIZE_WITHOUT_TOKEN;
 	pPacket->m_Token = 0;
+
+	if(Sixup)
+	{
+		unsigned Flags = NET_PACKETFLAG_TOKEN;
+		if (pPacket->m_Flags&1) Flags |= NET_PACKETFLAG_CONTROL;
+		if (pPacket->m_Flags&2) Flags |= NET_PACKETFLAG_RESEND;
+		if (pPacket->m_Flags&4) Flags |= NET_PACKETFLAG_COMPRESSION;
+		pPacket->m_Flags = Flags;
+	}
 
 	if(pPacket->m_Flags&NET_PACKETFLAG_CONNLESS)
 	{
@@ -264,7 +282,7 @@ int CNetBase::UnpackPacket(unsigned char *pBuffer, int Size, CNetPacketConstruct
 }
 
 
-void CNetBase::SendControlMsg(NETSOCKET Socket, NETADDR *pAddr, int Ack, bool UseToken, unsigned Token, int ControlMsg, const void *pExtra, int ExtraSize)
+void CNetBase::SendControlMsg(NETSOCKET Socket, NETADDR *pAddr, int Ack, bool UseToken, unsigned Token, int ControlMsg, const void *pExtra, int ExtraSize, bool Sixup)
 {
 	CNetPacketConstruct Construct;
 	Construct.m_Flags = NET_PACKETFLAG_CONTROL|(UseToken?NET_PACKETFLAG_TOKEN:0);
@@ -276,32 +294,32 @@ void CNetBase::SendControlMsg(NETSOCKET Socket, NETADDR *pAddr, int Ack, bool Us
 	mem_copy(&Construct.m_aChunkData[1], pExtra, ExtraSize);
 
 	// send the control message
-	CNetBase::SendPacket(Socket, pAddr, &Construct);
+	CNetBase::SendPacket(Socket, pAddr, &Construct, Sixup);
 }
 
 
 
-unsigned char *CNetChunkHeader::Pack(unsigned char *pData)
+unsigned char *CNetChunkHeader::Pack(unsigned char *pData, int split)
 {
-	pData[0] = ((m_Flags&3)<<6)|((m_Size>>4)&0x3f);
-	pData[1] = (m_Size&0xf);
+	pData[0] = ((m_Flags&3)<<6)|((m_Size>>split)&0x3f);
+	pData[1] = (m_Size&((1<<split)-1));
 	if(m_Flags&NET_CHUNKFLAG_VITAL)
 	{
-		pData[1] |= (m_Sequence>>2)&0xf0;
+		pData[1] |= (m_Sequence>>2)&(~((1<<split)-1));
 		pData[2] = m_Sequence&0xff;
 		return pData + 3;
 	}
 	return pData + 2;
 }
 
-unsigned char *CNetChunkHeader::Unpack(unsigned char *pData)
+unsigned char *CNetChunkHeader::Unpack(unsigned char *pData, int split)
 {
 	m_Flags = (pData[0]>>6)&3;
-	m_Size = ((pData[0]&0x3f)<<4) | (pData[1]&0xf);
+	m_Size = ((pData[0]&0x3f)<<split) | (pData[1]&((1<<split)-1));
 	m_Sequence = -1;
 	if(m_Flags&NET_CHUNKFLAG_VITAL)
 	{
-		m_Sequence = ((pData[1]&0xf0)<<2) | pData[2];
+		m_Sequence = ((pData[1]&(~((1<<split)-1)))<<2) | pData[2];
 		return pData + 3;
 	}
 	return pData + 2;

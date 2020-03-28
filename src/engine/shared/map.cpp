@@ -41,6 +41,11 @@ public:
 	{
 		return m_DataFile.Crc();
 	}
+
+	virtual unsigned char *Sha256()
+	{
+		return m_DataFile.Sha256();
+	}
 };
 
 extern IEngineMap *CreateEngineMap() { return new CMap; }

@@ -23,6 +23,7 @@ void CNetConnection::Reset()
 	m_LastUpdateTime = 0;
 	m_UseToken = true;
 	m_Token = 0;
+	m_Sixup = false;
 	mem_zero(&m_PeerAddr, sizeof(m_PeerAddr));
 
 	m_Buffer.Init();
@@ -81,9 +82,9 @@ int CNetConnection::Flush()
 	if(m_UseToken)
 	{
 		m_Construct.m_Flags |= NET_PACKETFLAG_TOKEN;
-		m_Construct.m_Token = m_Token;
+		m_Construct.m_Token = m_ResponseToken;
 	}
-	CNetBase::SendPacket(m_Socket, &m_PeerAddr, &m_Construct);
+	CNetBase::SendPacket(m_Socket, &m_PeerAddr, &m_Construct, m_Sixup);
 
 	// update send times
 	m_LastSendTime = time_get();
@@ -107,7 +108,7 @@ int CNetConnection::QueueChunkEx(int Flags, int DataSize, const void *pData, int
 	Header.m_Size = DataSize;
 	Header.m_Sequence = Sequence;
 	pChunkData = &m_Construct.m_aChunkData[m_Construct.m_DataSize];
-	pChunkData = Header.Pack(pChunkData);
+	pChunkData = Header.Pack(pChunkData, m_Sixup ? 6 : 4);
 	mem_copy(pChunkData, pData, DataSize);
 	pChunkData += DataSize;
 
@@ -154,7 +155,7 @@ void CNetConnection::SendControl(int ControlMsg, const void *pExtra, int ExtraSi
 	// send the control message
 	m_LastSendTime = time_get();
 	bool UseToken = m_UseToken && ControlMsg != NET_CTRLMSG_CONNECT;
-	CNetBase::SendControlMsg(m_Socket, &m_PeerAddr, m_Ack, UseToken, m_Token, ControlMsg, pExtra, ExtraSize);
+	CNetBase::SendControlMsg(m_Socket, &m_PeerAddr, m_Ack, UseToken, m_ResponseToken, ControlMsg, pExtra, ExtraSize, m_Sixup);
 }
 
 void CNetConnection::ResendChunk(CNetChunkResend *pResend)
@@ -191,7 +192,7 @@ int CNetConnection::Connect(NETADDR *pAddr)
 	return 0;
 }
 
-int CNetConnection::Accept(NETADDR *pAddr, unsigned Token)
+int CNetConnection::Accept(NETADDR *pAddr, unsigned Token, unsigned ResponseToken, bool Sixup)
 {
 	if(State() != NET_CONNSTATE_OFFLINE)
 		return -1;
@@ -203,6 +204,8 @@ int CNetConnection::Accept(NETADDR *pAddr, unsigned Token)
 	m_State = NET_CONNSTATE_ONLINE;
 	m_LastRecvTime = time_get();
 	m_Token = Token;
+	m_ResponseToken = ResponseToken;
+	m_Sixup = Sixup;
 	if(g_Config.m_Debug)
 	{
 		dbg_msg("connection", "connecting online");

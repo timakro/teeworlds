@@ -130,18 +130,28 @@ void CPlayer::Snap(int SnappingClient)
 	pClientInfo->m_ColorBody = m_TeeInfos.m_ColorBody;
 	pClientInfo->m_ColorFeet = m_TeeInfos.m_ColorFeet;
 
-	CNetObj_PlayerInfo *pPlayerInfo = static_cast<CNetObj_PlayerInfo *>(Server()->SnapNewItem(NETOBJTYPE_PLAYERINFO, m_ClientID, sizeof(CNetObj_PlayerInfo)));
+	int Size = Server()->IsSixup(SnappingClient) ? 3*4 : sizeof(CNetObj_PlayerInfo);
+	CNetObj_PlayerInfo *pPlayerInfo = static_cast<CNetObj_PlayerInfo *>(Server()->SnapNewItem(NETOBJTYPE_PLAYERINFO, m_ClientID, Size));
 	if(!pPlayerInfo)
 		return;
 
-	pPlayerInfo->m_Latency = SnappingClient == -1 ? m_Latency.m_Min : GameServer()->m_apPlayers[SnappingClient]->m_aActLatency[m_ClientID];
-	pPlayerInfo->m_Local = 0;
-	pPlayerInfo->m_ClientID = m_ClientID;
-	pPlayerInfo->m_Score = m_Score;
-	pPlayerInfo->m_Team = m_Team;
+	if(Server()->IsSixup(SnappingClient))
+	{
+		((int*)pPlayerInfo)[0] = 0; // m_PlayerFlags
+		((int*)pPlayerInfo)[1] = m_Score; // m_Score
+		((int*)pPlayerInfo)[2] = SnappingClient == -1 ? m_Latency.m_Min : GameServer()->m_apPlayers[SnappingClient]->m_aActLatency[m_ClientID];
+	}
+	else
+	{
+		pPlayerInfo->m_Latency = SnappingClient == -1 ? m_Latency.m_Min : GameServer()->m_apPlayers[SnappingClient]->m_aActLatency[m_ClientID];
+		pPlayerInfo->m_Local = 0;
+		pPlayerInfo->m_ClientID = m_ClientID;
+		pPlayerInfo->m_Score = m_Score;
+		pPlayerInfo->m_Team = m_Team;
 
-	if(m_ClientID == SnappingClient)
-		pPlayerInfo->m_Local = 1;
+		if(m_ClientID == SnappingClient)
+			pPlayerInfo->m_Local = 1;
+	}
 
 	if(m_ClientID == SnappingClient && m_Team == TEAM_SPECTATORS)
 	{

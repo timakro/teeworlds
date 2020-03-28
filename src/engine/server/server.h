@@ -121,6 +121,8 @@ public:
 		int m_Score;
 		int m_Authed;
 		int m_AuthTries;
+		bool m_Sixup;
+		int m_MapChunk;
 
 		const IConsole::CCommandInfo *m_pRconCmdToSend;
 
@@ -151,6 +153,7 @@ public:
 
 	char m_aCurrentMap[64];
 	unsigned m_CurrentMapCrc;
+	unsigned char *m_CurrentMapSha256;
 	unsigned char *m_pCurrentMapData;
 	int m_CurrentMapSize;
 
@@ -193,8 +196,10 @@ public:
 
 	void DoSnapshot();
 
-	static int NewClientCallback(int ClientID, bool Legacy, void *pUser);
+	static int NewClientCallback(int ClientID, bool Legacy, bool Sixup, void *pUser);
 	static int DelClientCallback(int ClientID, const char *pReason, void *pUser);
+
+	bool IsSixup(int ClientID) { return m_aClients[ClientID].m_Sixup; }
 
 	void SendMap(int ClientID);
 	void SendConnectionReady(int ClientID);

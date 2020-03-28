@@ -32,6 +32,7 @@ public:
 	void Unload();
 
 	unsigned Crc();
+	unsigned char *Sha256();
 };
 
 // write access

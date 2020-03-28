@@ -88,7 +88,7 @@ enum
 
 
 typedef int (*NETFUNC_DELCLIENT)(int ClientID, const char* pReason, void *pUser);
-typedef int (*NETFUNC_NEWCLIENT)(int ClientID, bool Legacy, void *pUser);
+typedef int (*NETFUNC_NEWCLIENT)(int ClientID, bool Legacy, bool Sixup, void *pUser);
 typedef int (*NETFUNC_NEWCLIENT_CON)(int ClientID, void *pUser);
 
 struct CNetChunk
@@ -109,8 +109,8 @@ public:
 	int m_Size;
 	int m_Sequence;
 
-	unsigned char *Pack(unsigned char *pData);
-	unsigned char *Unpack(unsigned char *pData);
+	unsigned char *Pack(unsigned char *pData, int split = 4);
+	unsigned char *Unpack(unsigned char *pData, int split = 4);
 };
 
 class CNetChunkResend
@@ -184,9 +184,11 @@ private:
 public:
 	void Init(NETSOCKET Socket, bool BlockCloseMsg);
 	int Connect(NETADDR *pAddr);
-	int Accept(NETADDR *pAddr, unsigned Token);
+	int Accept(NETADDR *pAddr, unsigned Token, unsigned ResponseToken, bool Sixup);
 	int AcceptLegacy(NETADDR *pAddr);
 	void Disconnect(const char *pReason);
+	unsigned m_ResponseToken;
+	bool m_Sixup;
 
 	int Update();
 	int Flush();
@@ -414,10 +416,10 @@ public:
 	static int Compress(const void *pData, int DataSize, void *pOutput, int OutputSize);
 	static int Decompress(const void *pData, int DataSize, void *pOutput, int OutputSize);
 
-	static void SendControlMsg(NETSOCKET Socket, NETADDR *pAddr, int Ack, bool UseToken, unsigned Token, int ControlMsg, const void *pExtra, int ExtraSize);
+	static void SendControlMsg(NETSOCKET Socket, NETADDR *pAddr, int Ack, bool UseToken, unsigned Token, int ControlMsg, const void *pExtra, int ExtraSize, bool Sixup = false);
 	static void SendPacketConnless(NETSOCKET Socket, NETADDR *pAddr, const void *pData, int DataSize);
-	static void SendPacket(NETSOCKET Socket, NETADDR *pAddr, CNetPacketConstruct *pPacket);
-	static int UnpackPacket(unsigned char *pBuffer, int Size, CNetPacketConstruct *pPacket);
+	static void SendPacket(NETSOCKET Socket, NETADDR *pAddr, CNetPacketConstruct *pPacket, bool Sixup = false);
+	static int UnpackPacket(unsigned char *pBuffer, int Size, CNetPacketConstruct *pPacket, bool Sixup = false);
 
 	// The backroom is ack-NET_MAX_SEQUENCE/2. Used for knowing if we acked a packet or not
 	static int IsSeqInBackroom(int Seq, int Ack);
